@@ -304,11 +304,11 @@ export default function App() {
         {/* Header Section */}
         <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-2 bg-black text-white rounded-full text-[10px] font-bold uppercase tracking-widest mb-2">
+            <div className="inline-flex items-center gap-2 px-2 bg-black text-white rounded-full text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">
               <FileSpreadsheet size={11} /> <span className="pt-1">Tool</span>
             </div>
             <h1 className="text-5xl font-black tracking-tighter">DRL <span className="text-gray-300">to</span> CSV</h1>
-            <p className="text-gray-500 font-medium">Extract workflow steps and metadata with precision.</p>
+            <p className="text-gray-500 font-small mt-4">Extract workflow_step, Label & referenceID with precision.</p>
           </div>
           <button 
             onClick={reset}
@@ -326,7 +326,7 @@ export default function App() {
             </div>
             
             <div className="relative z-10">
-              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-6">Step 01: Upload Source</h2>
+              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-6 ml-2">Upload Source</h2>
               
               <div className="flex flex-col md:flex-row items-center gap-6">
                 <label className={`
