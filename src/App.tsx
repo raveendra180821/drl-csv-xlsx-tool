@@ -345,12 +345,12 @@ export default function App() {
                         <div className="mt-3 flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-gray-400 bg-white/50 px-4 py-2 rounded-full border border-green-100 shadow-sm">
                           <span className="flex items-center gap-1.5">
                             <div className="w-1 h-1 bg-green-400 rounded-full" />
-                            {fileStats.size}
+                            <span className="pt-1">{fileStats.size}</span>
                           </span>
                           <div className="w-px h-2 bg-gray-200" />
                           <span className="flex items-center gap-1.5">
                             <div className="w-1 h-1 bg-green-400 rounded-full" />
-                            {fileStats.count} Steps Found
+                            <span className="pt-1">{fileStats.count} Steps Found</span>
                           </span>
                         </div>
                       )}
