@@ -304,8 +304,8 @@ export default function App() {
         {/* Header Section */}
         <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded-full text-[10px] font-bold uppercase tracking-widest mb-2">
-              <FileSpreadsheet size={12} /> Production Tool
+            <div className="inline-flex items-center gap-2 px-2 bg-black text-white rounded-full text-[10px] font-bold uppercase tracking-widest mb-2">
+              <FileSpreadsheet size={11} /> <span className="pt-1">Tool</span>
             </div>
             <h1 className="text-5xl font-black tracking-tighter">DRL <span className="text-gray-300">to</span> CSV</h1>
             <p className="text-gray-500 font-medium">Extract workflow steps and metadata with precision.</p>
