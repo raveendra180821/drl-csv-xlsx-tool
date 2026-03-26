@@ -9,7 +9,7 @@ import {
   FileText, 
   Download, 
   Copy, 
-  Trash2, 
+  RefreshCw, 
   Check, 
   FileUp,
   AlertCircle,
@@ -314,7 +314,7 @@ export default function App() {
             onClick={reset}
             className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-bold hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
           >
-            <Trash2 size={18} className="text-red-500" /> Reset Tool
+            <RefreshCw size={18} className="text-red-500" /> Reset Tool
           </button>
         </header>
 
