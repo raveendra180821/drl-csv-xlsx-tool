@@ -232,7 +232,7 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
     }, {} as { [key: string]: string[] });
 
     return Object.entries(grouped).map(([state, labels], index, array) => {
-      const stateHeader = `in ${state}:`;
+      const stateHeader = `${state}:`;
       const labelsList = labels.map(label => `\t${label}`).join('\n');
       const separator = index < array.length - 1 ? '\n\n-----------------------------------------\n\n' : '';
       return `${stateHeader}\n${labelsList}${separator}`;
