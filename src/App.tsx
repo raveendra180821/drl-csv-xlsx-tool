@@ -352,10 +352,10 @@ export default function App() {
           theme === 'dark' ? 'glass-header' : 'mb-12'
         }`}>
           <div className="space-y-2">
-            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 ${
+            <div className={`inline-flex items-center gap-2 px-2 rounded-full text-[10px] font-black uppercase tracking-widest py-0.5 ${
               theme === 'dark' ? 'bg-accent text-black accent-glow' : 'bg-black text-white'
             }`}>
-              <FileSpreadsheet size={12} /> DRL Tool
+              <FileSpreadsheet size={12} /> <span className='mt-1'>DRL Tool</span>
             </div>
             <h1 className={`tracking-tighter leading-none ${
               theme === 'dark' ? 'text-6xl font-black' : 'text-5xl font-black'
