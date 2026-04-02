@@ -137,10 +137,10 @@ export default function App() {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
       if (saved === 'dark' || saved === 'light') return saved;
-      // Default to dark as requested
-      return 'dark';
+      // Default to light as requested
+      return 'light';
     }
-    return 'dark';
+    return 'light';
   });
 
   useEffect(() => {
@@ -469,13 +469,13 @@ export default function App() {
                             <div className={`mt-3 flex items-center gap-3 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full border shadow-sm ${
                               theme === 'dark' ? 'text-white/40 bg-white/5 border-white/10' : 'text-gray-400 bg-white/50 border-green-100'
                             }`}>
-                              <span className="flex items-center gap-1.5 mt-1">
-                                <div className={`w-1 h-1 rounded-full ${theme === 'dark' ? 'bg-accent accent-glow' : 'bg-green-400'} mb-1`} />
+                              <span className="flex items-center gap-1.5">
+                                <div className={`w-1 h-1 rounded-full ${theme === 'dark' ? 'bg-accent accent-glow' : 'bg-green-400'}`} />
                                 {fileStats.size}
                               </span>
                               <div className={`w-px h-2 ${theme === 'dark' ? 'bg-white/10' : 'bg-gray-200'}`} />
-                              <span className="flex items-center gap-1.5 mt-1">
-                                <div className={`w-1 h-1 rounded-full ${theme === 'dark' ? 'bg-accent accent-glow' : 'bg-green-400'} mb-1`} />
+                              <span className="flex items-center gap-1.5">
+                                <div className={`w-1 h-1 rounded-full ${theme === 'dark' ? 'bg-accent accent-glow' : 'bg-green-400'}`} />
                                 {fileStats.count} Steps Found
                               </span>
                             </div>
