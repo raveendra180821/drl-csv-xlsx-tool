@@ -380,7 +380,7 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
           >
             <div className="p-8 border-b flex flex-col md:flex-row md:items-center justify-between gap-6 border-gray-50">
               <div>
-                <h2 className="text-xs font-black uppercase tracking-[0.2em] mb-2 text-gray-400">Step 03: Formatted Results</h2>
+                <h2 className="text-xs font-black uppercase tracking-[0.2em] mb-2 text-gray-400">Formatted Results</h2>
                 <h3 className="text-2xl font-bold">{results.length} Matches Found</h3>
               </div>
               <div className="flex gap-3">

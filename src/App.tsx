@@ -350,7 +350,8 @@ export default function App() {
           {view === 'drl-to-csv' && (
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 bg-black text-white">
-                <FileSpreadsheet size={12} /> DRL Tool
+                <FileSpreadsheet className='mb-0.5' size={12} /> 
+                <span className='mt-0.5'>DRL Tool</span>
               </div>
               <h1 className="tracking-tighter leading-none text-5xl font-black">
                 DRL <span className="text-gray-300">to</span> CSV
@@ -596,7 +597,7 @@ export default function App() {
         >
           <div className="flex items-center gap-3 text-gray-400">
             <FileSpreadsheet size={20} />
-            <span className="text-xs font-bold uppercase tracking-widest">DRL Tool v2.0</span>
+            <span className="text-xs font-bold uppercase tracking-widest pt-2">DRL Tool v2.0</span>
           </div>
           <div className="flex items-center gap-3">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">
