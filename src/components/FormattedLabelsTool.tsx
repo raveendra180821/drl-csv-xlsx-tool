@@ -23,10 +23,9 @@ interface FormattedLabelData {
 
 interface FormattedLabelsToolProps {
   onBack: () => void;
-  theme: 'light' | 'dark';
 }
 
-export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack, theme }) => {
+export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack }) => {
   const [file, setFile] = useState<File | null>(null);
   const [fileStats, setFileStats] = useState<{ rows: number; cols: number } | null>(null);
   const workbookRef = useRef<XLSX.WorkBook | null>(null);
@@ -89,7 +88,8 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
             if (cell.c > maxCol) maxCol = cell.c;
           }
 
-          setFileStats({ rows: maxRow + 1, cols: maxCol + 1 });
+          const dataRows = Math.max(0, maxRow - 8); // Row 9 is header (index 8)
+          setFileStats({ rows: dataRows, cols: maxCol + 1 });
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Failed to read Excel file.');
           console.error(err);
@@ -232,7 +232,7 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
     }, {} as { [key: string]: string[] });
 
     return Object.entries(grouped).map(([state, labels], index, array) => {
-      const stateHeader = `${state}:`;
+      const stateHeader = `in ${state}:`;
       const labelsList = labels.map(label => `\t${label}`).join('\n');
       const separator = index < array.length - 1 ? '\n\n-----------------------------------------\n\n' : '';
       return `${stateHeader}\n${labelsList}${separator}`;
@@ -252,17 +252,15 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
       >
         <button 
           onClick={onBack}
-          className={`p-3 rounded-2xl transition-all active:scale-95 cursor-pointer ${
-            theme === 'dark' ? 'glass-button' : 'bg-white border border-gray-200 hover:bg-gray-50'
-          }`}
+          className="p-3 rounded-2xl transition-all active:scale-95 cursor-pointer bg-white border border-gray-200 hover:bg-gray-50"
         >
-          <ArrowLeft size={20} className={theme === 'dark' ? 'text-accent' : 'text-gray-600'} />
+          <ArrowLeft size={20} className="text-gray-600" />
         </button>
         <div>
-          <h2 className={`text-3xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+          <h2 className="text-3xl font-black tracking-tight text-gray-900">
             Formatted Labels
           </h2>
-          <p className={`text-sm font-medium ${theme === 'dark' ? 'text-white/40' : 'text-gray-500'}`}>
+          <p className="text-sm font-medium text-gray-500">
             Extract and format labels from Excel based on Reference IDs.
           </p>
         </div>
@@ -273,51 +271,40 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
         <motion.section 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`p-8 relative overflow-hidden transition-all duration-500 ${
-            theme === 'dark' ? 'glass-card group' : 'bg-white rounded-[2.5rem] border border-gray-100 shadow-xl shadow-black/[0.02]'
-          }`}
+          className="p-8 relative overflow-hidden transition-all duration-500 bg-white rounded-[2.5rem] border border-gray-100 shadow-xl shadow-black/[0.02]"
         >
-          <h3 className={`font-black uppercase tracking-[0.2em] mb-6 ${
-            theme === 'dark' ? 'text-[10px] text-white/30 flex items-center gap-3' : 'text-xs text-gray-400'
-          }`}>
-            {theme === 'dark' && <div className="w-8 h-px bg-white/10" />}
+          <h3 className="font-black uppercase tracking-[0.2em] mb-6 text-xs text-gray-400">
             Upload XLSX
           </h3>
 
           <label className={`
             w-full cursor-pointer flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-[2rem] transition-all duration-500
             ${file 
-              ? (theme === 'dark' ? 'border-accent/40 bg-accent/5' : 'border-green-200 bg-green-50/30') 
-              : (theme === 'dark' ? 'border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20' : 'border-gray-200 bg-gray-50/50 hover:bg-gray-50 hover:border-gray-300')}
+              ? 'border-green-200 bg-green-50/30' 
+              : 'border-gray-200 bg-gray-50/50 hover:bg-gray-50 hover:border-gray-300'}
           `}>
             <input type="file" className="hidden" accept=".xlsx" onChange={handleFileUpload} />
             {file ? (
               <div className="flex flex-col items-center text-center">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-inner ${
-                  theme === 'dark' ? 'bg-accent/10 text-accent accent-glow' : 'bg-green-100 text-green-600'
-                }`}>
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-inner bg-green-100 text-green-600">
                   <CheckCircle2 size={32} />
                 </div>
-                <span className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{file.name}</span>
+                <span className="text-lg font-bold text-gray-800">{file.name}</span>
                 {fileStats && (
-                  <div className={`mt-3 flex items-center gap-3 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full border shadow-sm ${
-                    theme === 'dark' ? 'text-white/40 bg-white/5 border-white/10' : 'text-gray-400 bg-white/50 border-green-100'
-                  }`}>
+                  <div className="mt-3 flex items-center gap-3 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full border shadow-sm text-gray-400 bg-white/50 border-green-100">
                     <span>{fileStats.rows} Rows</span>
-                    <div className={`w-px h-2 ${theme === 'dark' ? 'bg-white/10' : 'bg-gray-200'}`} />
+                    <div className="w-px h-2 bg-gray-200" />
                     <span>{fileStats.cols} Columns</span>
                   </div>
                 )}
               </div>
             ) : (
               <div className="flex flex-col items-center text-center">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-sm border ${
-                  theme === 'dark' ? 'bg-white/5 text-white/20 border-white/10' : 'bg-white text-gray-400 border-gray-100'
-                }`}>
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-sm border bg-white text-gray-400 border-gray-100">
                   <FileUp size={32} />
                 </div>
-                <span className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>Choose .xlsx file</span>
-                <span className={`text-sm mt-1 ${theme === 'dark' ? 'text-white/30' : 'text-gray-400'}`}>Drag and drop or click to browse</span>
+                <span className="text-lg font-bold text-gray-800">Choose .xlsx file</span>
+                <span className="text-sm mt-1 text-gray-400">Drag and drop or click to browse</span>
               </div>
             )}
           </label>
@@ -328,14 +315,9 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className={`p-8 relative overflow-hidden transition-all duration-500 ${
-            theme === 'dark' ? 'glass-card group' : 'bg-white rounded-[2.5rem] border border-gray-100 shadow-xl shadow-black/[0.02]'
-          }`}
+          className="p-8 relative overflow-hidden transition-all duration-500 bg-white rounded-[2.5rem] border border-gray-100 shadow-xl shadow-black/[0.02]"
         >
-          <h3 className={`font-black uppercase tracking-[0.2em] mb-6 ${
-            theme === 'dark' ? 'text-[10px] text-white/30 flex items-center gap-3' : 'text-xs text-gray-400'
-          }`}>
-            {theme === 'dark' && <div className="w-8 h-px bg-white/10" />}
+          <h3 className="font-black uppercase tracking-[0.2em] mb-6 text-xs text-gray-400">
             Reference IDs
           </h3>
 
@@ -344,11 +326,7 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
               value={referenceIDsInput}
               onChange={(e) => setReferenceIDsInput(e.target.value)}
               placeholder="Paste referenceIDs line by line..."
-              className={`w-full h-48 p-6 rounded-[2rem] font-mono text-sm resize-none focus:outline-none focus:ring-2 transition-all ${
-                theme === 'dark' 
-                  ? 'bg-white/5 border-white/10 text-white focus:ring-accent/50' 
-                  : 'bg-gray-50 border-gray-200 text-gray-800 focus:ring-black/5'
-              }`}
+              className="w-full h-48 p-6 rounded-[2rem] font-mono text-sm resize-none focus:outline-none focus:ring-2 transition-all bg-gray-50 border border-gray-200 text-gray-800 focus:ring-black/5"
             />
             <button
               onClick={processLabels}
@@ -356,8 +334,8 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
               className={`
                 w-full flex items-center justify-center gap-3 px-8 py-5 rounded-[2rem] font-black text-lg transition-all active:scale-95 cursor-pointer
                 ${!file || !referenceIDsInput.trim() || isProcessing 
-                  ? (theme === 'dark' ? 'bg-white/5 text-white/10 cursor-not-allowed' : 'bg-gray-100 text-gray-300 cursor-not-allowed') 
-                  : (theme === 'dark' ? 'bg-accent text-black hover:bg-white accent-glow' : 'bg-black text-white hover:bg-gray-800')}
+                  ? 'bg-gray-100 text-gray-300 cursor-not-allowed' 
+                  : 'bg-black text-white hover:bg-gray-800'}
               `}
             >
               {isProcessing ? (
@@ -378,13 +356,9 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className={`p-6 rounded-3xl flex items-center gap-4 transition-colors duration-500 ${
-              theme === 'dark' ? 'bg-red-500/10 border border-red-500/20 text-red-400 backdrop-blur-md' : 'bg-red-50 border border-red-100 text-red-800'
-            }`}
+            className="p-6 rounded-3xl flex items-center gap-4 transition-colors duration-500 bg-red-50 border border-red-100 text-red-800"
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              theme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'
-            }`}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-red-100">
               <AlertCircle size={20} />
             </div>
             <div>
@@ -402,27 +376,19 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
             ref={resultsRef}
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`rounded-[2.5rem] border overflow-hidden transition-all duration-500 ${
-              theme === 'dark' ? 'glass-card' : 'bg-white border-gray-100 shadow-2xl shadow-black/[0.03]'
-            }`}
+            className="rounded-[2.5rem] border overflow-hidden transition-all duration-500 bg-white border-gray-100 shadow-2xl shadow-black/[0.03]"
           >
-            <div className={`p-8 border-b flex flex-col md:flex-row md:items-center justify-between gap-6 ${
-              theme === 'dark' ? 'border-white/5' : 'border-gray-50'
-            }`}>
+            <div className="p-8 border-b flex flex-col md:flex-row md:items-center justify-between gap-6 border-gray-50">
               <div>
-                <h2 className={`text-xs font-black uppercase tracking-[0.2em] mb-2 ${
-                  theme === 'dark' ? 'text-white/30' : 'text-gray-400'
-                }`}>Formatted Results</h2>
-                <h3 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : ''}`}>{results.length} Matches Found</h3>
+                <h2 className="text-xs font-black uppercase tracking-[0.2em] mb-2 text-gray-400">Step 03: Formatted Results</h2>
+                <h3 className="text-2xl font-bold">{results.length} Matches Found</h3>
               </div>
               <div className="flex gap-3">
                 <button 
                   onClick={() => setShowSimpleFormat(!showSimpleFormat)}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all active:scale-95 cursor-pointer ${
-                    theme === 'dark' ? 'glass-button' : 'bg-gray-50 border border-gray-100 hover:bg-gray-100'
-                  }`}
+                  className="flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all active:scale-95 cursor-pointer bg-gray-50 border border-gray-100 hover:bg-gray-100"
                 >
-                  <FileText size={18} className={theme === 'dark' ? 'text-accent' : 'text-blue-600'} />
+                  <FileText size={18} className="text-blue-600" />
                   {showSimpleFormat ? 'Show Table' : 'Simple Format'}
                 </button>
               </div>
@@ -431,72 +397,48 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
             {showSimpleFormat ? (
               <div className="p-8">
                 <div className="flex justify-between items-center mb-4">
-                  <h4 className={`text-sm font-black uppercase tracking-widest ${theme === 'dark' ? 'text-white/40' : 'text-gray-400'}`}>
+                  <h4 className="text-sm font-black uppercase tracking-widest text-gray-400">
                     Plain Text Output
                   </h4>
                   <button 
                     onClick={copySimpleFormat}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
-                      theme === 'dark' ? 'bg-white/5 text-white/60 hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer bg-gray-100 text-gray-600 hover:bg-gray-200"
                   >
                     <Copy size={14} /> Copy Text
                   </button>
                 </div>
-                <pre className={`p-8 rounded-3xl font-mono text-sm overflow-x-auto whitespace-pre-wrap leading-relaxed border ${
-                  theme === 'dark' 
-                    ? 'bg-black/40 border-white/5 text-white/80' 
-                    : 'bg-gray-50 border-gray-100 text-gray-700'
-                }`}>
+                <pre className="p-8 rounded-3xl font-mono text-sm overflow-x-auto whitespace-pre-wrap leading-relaxed border bg-gray-50 border-gray-100 text-gray-700">
                   {getSimpleFormatText()}
                 </pre>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse table-fixed">
-                <thead className={`sticky top-0 backdrop-blur-md z-10 ${
-                  theme === 'dark' ? 'bg-white/[0.02]' : 'bg-gray-50/50'
-                }`}>
+                <thead className="sticky top-0 backdrop-blur-md z-10 bg-gray-50/50">
                   <tr>
-                    <th className={`w-[45%] px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b ${
-                      theme === 'dark' ? 'text-white/30 border-white/5' : 'text-gray-400 border-gray-100'
-                    }`}>
+                    <th className="w-[45%] px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b text-gray-400 border-gray-100">
                       <div className="flex items-center gap-2"><FileSpreadsheet size={12} /> formatted label</div>
                     </th>
-                    <th className={`w-[25%] px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b ${
-                      theme === 'dark' ? 'text-white/30 border-white/5' : 'text-gray-400 border-gray-100'
-                    }`}>
+                    <th className="w-[25%] px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b text-gray-400 border-gray-100">
                       <div className="flex items-center gap-2"><Search size={12} /> state</div>
                     </th>
-                    <th className={`w-[30%] px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b ${
-                      theme === 'dark' ? 'text-white/30 border-white/5' : 'text-gray-400 border-gray-100'
-                    }`}>
+                    <th className="w-[30%] px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b text-gray-400 border-gray-100">
                       <div className="flex items-center gap-2"><Hash size={12} /> referenceID</div>
                     </th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${theme === 'dark' ? 'divide-white/[0.03]' : 'divide-gray-50'}`}>
+                <tbody className="divide-y divide-gray-50">
                   {results.map((item, idx) => (
-                    <tr key={idx} className={`group transition-colors ${
-                      theme === 'dark' ? 'hover:bg-white/[0.02]' : 'hover:bg-gray-50/30'
-                    }`}>
+                    <tr key={idx} className="group transition-colors hover:bg-gray-50/30">
                       <td className="px-8 py-5 break-words">
-                        <span className={`inline-block px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                          theme === 'dark' 
-                            ? 'bg-accent/20 text-accent border border-accent/30 shadow-[0_0_15px_rgba(var(--accent-rgb),0.1)]' 
-                            : 'bg-blue-50 text-blue-700 border border-blue-100 shadow-sm'
-                        }`}>
+                        <span className="inline-block px-4 py-2 rounded-xl text-xs font-bold transition-all bg-blue-50 text-blue-700 border border-blue-100 shadow-sm">
                           {item.formattedLabel}
                         </span>
                       </td>
-                      <td className={`px-8 py-5 text-sm font-bold transition-colors break-words ${
-                        theme === 'dark' ? 'text-white/80 group-hover:text-white' : 'text-gray-800 group-hover:text-black'
-                      }`}>
+                      <td className="px-8 py-5 text-sm font-bold transition-colors break-words text-gray-800 group-hover:text-black">
                         {item.state}
                       </td>
-                      <td className={`px-8 py-5 text-sm font-mono transition-colors break-all ${
-                        theme === 'dark' ? 'text-white/40 group-hover:text-white/60' : 'text-gray-500 group-hover:text-gray-700'
-                      }`}>
+                      <td className="px-8 py-5 text-sm font-mono transition-colors break-all text-gray-500 group-hover:text-gray-700">
                         {item.referenceID}
                       </td>
                     </tr>
