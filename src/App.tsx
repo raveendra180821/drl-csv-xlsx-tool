@@ -21,6 +21,8 @@ import {
   Loader2,
   FileCode,
   Tags,
+  ArrowLeft,
+  RotateCcw,
   RefreshCw,
   Type
 } from 'lucide-react';
@@ -36,7 +38,7 @@ interface RuleData {
   referenceID: string;
   state: string;
   step: string;
-  rejected: string;
+  rejected: boolean | string;
   extractedCurrentState?: string;
 }
 
@@ -93,13 +95,13 @@ const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose, onDownlo
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setFormat('csv')}
-                className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all font-bold cursor-pointer ${format === 'csv' ? 'border-black bg-black text-white' : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'}`}
+                className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all font-bold cursor-pointer ${format === 'csv' ? 'border-blue-700 bg-blue-700 text-white' : 'border-gray-100 bg-blue-50 text-gray-400 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-600'}`}
               >
                 <FileText size={18} /> CSV
               </button>
               <button
                 onClick={() => setFormat('xlsx')}
-                className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all font-bold cursor-pointer ${format === 'xlsx' ? 'border-black bg-black text-white' : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'}`}
+                className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all font-bold cursor-pointer ${format === 'xlsx' ? 'border-blue-700 bg-blue-700 text-white' : 'border-gray-100 bg-blue-50 text-gray-400 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-600'}`}
               >
                 <FileSpreadsheet size={18} /> Excel
               </button>
@@ -109,13 +111,13 @@ const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose, onDownlo
         <div className="p-6 bg-gray-50 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl font-bold hover:bg-gray-100 text-gray-600 transition-all active:scale-95 cursor-pointer"
+            className="flex-1 px-4 py-3 bg-transparent text-gray-400 rounded-xl font-bold hover:bg-gray-100 hover:text-gray-600 transition-all active:scale-95 cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={() => onDownload(filename, format)}
-            className="flex-1 px-4 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-all shadow-lg active:scale-95 cursor-pointer"
+            className="flex-1 px-4 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-all shadow-xl active:scale-95 cursor-pointer"
           >
             Download
           </button>
@@ -126,7 +128,7 @@ const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose, onDownlo
 };
 
 export default function App() {
-  const [view, setView] = useState<'drl-to-csv' | 'formatted-labels' | 'capitalize-ref-ids'>('drl-to-csv');
+  const [view, setView] = useState<'home' | 'drl-to-csv' | 'formatted-labels' | 'capitalize-ref-ids'>('home');
   const [file, setFile] = useState<File | null>(null);
   const [fileStats, setFileStats] = useState<{ size: string; count: number } | null>(null);
   const [input, setInput] = useState('');
@@ -217,7 +219,7 @@ export default function App() {
             const step = jsonData.step || '';
             const state = jsonData.state || '';
             const workflowStepId = jsonData.workflowStepId || '';
-            const rejected = jsonData.rejected !== undefined ? String(jsonData.rejected) : '';
+            const rejected = jsonData.rejected !== undefined ? jsonData.rejected : '';
 
             // Concatenate state and step as "state | step"
             let label = '';
@@ -289,7 +291,7 @@ export default function App() {
         ...results.map(r => [
           r.workflowStep, 
           r.extractedCurrentState || '',
-          `"${r.state}","${r.step}","${r.rejected}","${r.referenceID}"`
+          `"${r.step}","${r.state}",${r.rejected},"${r.referenceID}"`
         ]) // Row 10 onwards: Data
       ];
       
@@ -308,7 +310,11 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const reset = () => {
+  const resetApp = () => {
+    window.location.reload();
+  };
+
+  const resetTool = () => {
     if (view === 'drl-to-csv') {
       setFile(null);
       setFileStats(null);
@@ -323,15 +329,8 @@ export default function App() {
     }
   };
 
-  const handleBackToDrl = () => {
-    // Reset DRL state specifically when going back
-    setFile(null);
-    setFileStats(null);
-    setInput('');
-    setResults([]);
-    setError(null);
-    setIsModalOpen(false);
-    setView('drl-to-csv');
+  const handleBackToHome = () => {
+    setView('home');
   };
 
   return (
@@ -347,21 +346,50 @@ export default function App() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12"
         >
-          {view === 'drl-to-csv' && (
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 bg-black text-white">
-                <FileSpreadsheet className='mb-0.5' size={12} /> 
-                <span className='mt-0.5'>DRL Tool</span>
-              </div>
-              <h1 className="tracking-tighter leading-none text-5xl font-black">
-                DRL <span className="text-gray-300">to</span> CSV
-              </h1>
-              <p className="font-medium text-gray-500">
-                Extract workflow steps and metadata with precision.
-              </p>
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 bg-black text-white">
+              {view === 'home' ? <RefreshCw className='mb-0.5' size={12} /> : view === 'drl-to-csv' ? <FileSpreadsheet className='mb-0.5' size={12} /> : view === 'formatted-labels' ? <Tags className='mb-0.5' size={12} /> : <Type className='mb-0.5' size={12} />}
+              <span className='mt-0.5'>{view === 'home' ? 'Tool Selection' : view === 'drl-to-csv' ? 'DRL Tool' : view === 'formatted-labels' ? 'Labels Tool' : 'Capitalize Tool'}</span>
             </div>
-          )}
+            <h1 className="tracking-tighter leading-none text-5xl font-black">
+              {view === 'home' ? (
+                <>Select <span className="text-gray-300">a</span> Tool</>
+              ) : view === 'drl-to-csv' ? (
+                <>DRL <span className="text-gray-300">to</span> <span className="text-4xl">CSV<span className="text-gray-300">{' '}∕{' '}</span>XML</span></>
+              ) : view === 'formatted-labels' ? (
+                <>Formatted <span className="text-gray-300">Labels</span></>
+              ) : (
+                <>Capitalize <span className="text-gray-300">IDs</span></>
+              )}
+            </h1>
+            <p className="font-medium text-gray-500">
+              {view === 'home'
+                ? 'Choose the specialized tool you need for your workflow.'
+                : view === 'drl-to-csv' 
+                  ? 'Extract workflow steps and metadata with precision.' 
+                  : view === 'formatted-labels' 
+                    ? 'Extract and format labels based on Reference IDs.' 
+                    : 'Normalize quotes and capitalize Reference IDs in Excel.'}
+            </p>
+          </div>
+          
           <div className="flex items-center gap-3">
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setView('drl-to-csv')}
+              className={`flex items-center gap-2 px-4 py-3 rounded-2xl transition-all shadow-sm cursor-pointer ${
+                view === 'drl-to-csv' 
+                  ? 'bg-black text-white'
+                  : 'bg-white border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <FileSpreadsheet size={18} className={view === 'drl-to-csv' ? '' : 'text-blue-600'} />
+              <span className={`text-xs font-bold ${view === 'drl-to-csv' ? '' : 'text-gray-600'}`}>
+                DRL Tool
+              </span>
+            </motion.button>
+
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -374,7 +402,7 @@ export default function App() {
             >
               <Tags size={18} className={view === 'formatted-labels' ? '' : 'text-blue-600'} />
               <span className={`text-xs font-bold ${view === 'formatted-labels' ? '' : 'text-gray-600'}`}>
-                Get Formatted Labels
+                Labels Tool
               </span>
             </motion.button>
 
@@ -388,29 +416,106 @@ export default function App() {
                   : 'bg-white border border-gray-200 hover:bg-gray-50'
               }`}
             >
-              <Type size={18} className={view === 'capitalize-ref-ids' ? '' : 'text-blue-600'} />
-              <span className={`text-xs font-bold ${view === 'capitalize-ref-ids' ? '' : 'text-gray-600'}`}>
-                Capitalize Reference IDs
+              <Type size={15} className={view === 'capitalize-ref-ids' ? '' : 'text-blue-600'} />
+              <span className={`text-xs font-bold pt-0.5 ${view === 'capitalize-ref-ids' ? '' : 'text-gray-600'}`}>
+                Capitalize Tool
               </span>
             </motion.button>
 
             <div className="w-px h-8 mx-1 bg-gray-200" />
 
-            <motion.button 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={reset}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm cursor-pointer bg-red-50 border border-red-100 text-red-600 hover:bg-red-100"
-            >
-              <RefreshCw size={18} className="text-red-600" /> 
-              <span>Reset Tool</span>
-            </motion.button>
+            <AnimatePresence>
+              {view === 'home' && (
+                <motion.button 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={resetApp}
+                  className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm cursor-pointer bg-red-50 border border-red-100 text-red-600 hover:bg-red-100"
+                >
+                  <RefreshCw size={18} className="text-red-600" /> 
+                  <span>Reset</span>
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
         </motion.header>
 
         <main className="space-y-8">
-          {view === 'drl-to-csv' ? (
+          {view === 'home' ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-12">
+              <motion.button
+                whileHover={{ y: -10, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setView('drl-to-csv')}
+                className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-xl shadow-black/[0.02] text-left group transition-all hover:border-black/10 cursor-pointer"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6 group-hover:bg-black group-hover:text-white transition-colors">
+                  <FileSpreadsheet size={32} />
+                </div>
+                <h3 className="text-2xl font-bold mb-2">DRL to CSV⧸ XML</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">Extract workflow steps and metadata from DRL files with precision.</p>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ y: -10, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setView('formatted-labels')}
+                className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-xl shadow-black/[0.02] text-left group transition-all hover:border-black/10 cursor-pointer"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mb-6 group-hover:bg-black group-hover:text-white transition-colors">
+                  <Tags size={32} />
+                </div>
+                <h3 className="text-2xl font-bold mb-2">Formatted Labels</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">Extract and format labels based on Reference IDs from Excel files.</p>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ y: -10, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setView('capitalize-ref-ids')}
+                className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-xl shadow-black/[0.02] text-left group transition-all hover:border-black/10 cursor-pointer"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center mb-6 group-hover:bg-black group-hover:text-white transition-colors">
+                  <Type size={32} />
+                </div>
+                <h3 className="text-2xl font-bold mb-2">Capitalize IDs</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">Normalize quotes and capitalize Reference IDs in Excel files.</p>
+              </motion.button>
+            </div>
+          ) : view === 'drl-to-csv' ? (
             <>
+              {/* Tool Header */}
+              <motion.div 
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-center justify-between mb-8"
+              >
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleBackToHome}
+                  className="group flex items-center gap-3 px-5 py-3 rounded-2xl transition-all cursor-pointer bg-white border border-blue-900 hover:bg-blue-50 hover:shadow-md"
+                >
+                  <ArrowLeft size={18} className="text-blue-900 transition-colors" />
+                  <span className="text-sm font-bold text-blue-900 transition-colors">
+                    Go back to Home
+                  </span>
+                </motion.button>
+
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={resetTool}
+                  className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm cursor-pointer bg-red-50 border border-red-100 text-red-600 hover:bg-red-100"
+                >
+                  <RefreshCw size={18} className="text-red-600" /> 
+                  <span>Reset Tool</span>
+                </motion.button>
+              </motion.div>
+
               {/* Upload Card */}
               <motion.section 
                 initial={{ opacity: 0, y: 20 }}
@@ -583,9 +688,9 @@ export default function App() {
               </AnimatePresence>
             </>
           ) : view === 'formatted-labels' ? (
-            <FormattedLabelsTool key={`formatted-${formattedLabelsResetCounter}`} onBack={handleBackToDrl} />
+            <FormattedLabelsTool key={`formatted-${formattedLabelsResetCounter}`} onBack={handleBackToHome} onReset={resetTool} />
           ) : (
-            <CapitalizeRefIDsTool key={`capitalize-${capitalizeRefIdsResetCounter}`} onBack={handleBackToDrl} />
+            <CapitalizeRefIDsTool key={`capitalize-${capitalizeRefIdsResetCounter}`} onBack={handleBackToHome} onReset={resetTool} />
           )}
         </main>
 
@@ -613,7 +718,7 @@ export default function App() {
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
             onDownload={handleDownload}
-            initialFilename={file ? file.name.replace('.drl', '') : 'converted_rules'}
+            initialFilename={file ? `${file.name.replace('.drl', '')} (Converted from DRL)` : 'converted_rules'}
           />
         )}
       </AnimatePresence>

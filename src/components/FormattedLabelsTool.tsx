@@ -8,6 +8,7 @@ import {
   CheckCircle2, 
   Loader2, 
   ArrowLeft,
+  RefreshCw,
   Search,
   Hash,
   FileText,
@@ -23,9 +24,10 @@ interface FormattedLabelData {
 
 interface FormattedLabelsToolProps {
   onBack: () => void;
+  onReset: () => void;
 }
 
-export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack }) => {
+export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack, onReset }) => {
   const [file, setFile] = useState<File | null>(null);
   const [fileStats, setFileStats] = useState<{ rows: number; cols: number } | null>(null);
   const workbookRef = useRef<XLSX.WorkBook | null>(null);
@@ -248,22 +250,29 @@ export const FormattedLabelsTool: React.FC<FormattedLabelsToolProps> = ({ onBack
       <motion.div 
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
-        className="flex items-center gap-4"
+        className="flex items-center justify-between"
       >
-        <button 
+        <motion.button 
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={onBack}
-          className="p-3 rounded-2xl transition-all active:scale-95 cursor-pointer bg-white border border-gray-200 hover:bg-gray-50"
+          className="group flex items-center gap-3 px-5 py-3 rounded-2xl transition-all cursor-pointer bg-white border border-blue-900 hover:bg-blue-50 hover:shadow-md"
         >
-          <ArrowLeft size={20} className="text-gray-600" />
-        </button>
-        <div>
-          <h2 className="text-3xl font-black tracking-tight text-gray-900">
-            Formatted Labels
-          </h2>
-          <p className="text-sm font-medium text-gray-500">
-            Extract and format labels from Excel based on Reference IDs.
-          </p>
-        </div>
+          <ArrowLeft size={18} className="text-blue-900 transition-colors" />
+          <span className="text-sm font-bold text-blue-900 transition-colors">
+            Go back to Home
+          </span>
+        </motion.button>
+
+        <motion.button 
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onReset}
+          className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm cursor-pointer bg-red-50 border border-red-100 text-red-600 hover:bg-red-100"
+        >
+          <RefreshCw size={18} className="text-red-600" /> 
+          <span>Reset Tool</span>
+        </motion.button>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

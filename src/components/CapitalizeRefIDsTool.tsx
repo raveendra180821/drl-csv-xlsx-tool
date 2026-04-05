@@ -8,6 +8,7 @@ import {
   Download, 
   AlertCircle, 
   ArrowLeft,
+  RefreshCw,
   FileSpreadsheet,
   Type
 } from 'lucide-react';
@@ -44,27 +45,37 @@ const transformPossibleNextStep = (value: string, option: 'quotes' | 'capitalize
 
   const transformedParts = parts.map((part, index) => {
     let newPart = part;
+    const trimmed = newPart.trim();
+    if (trimmed.length === 0) return newPart;
+
+    const getContent = (s: string) => {
+      if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+        return s.slice(1, -1);
+      }
+      return s;
+    };
+
+    const content = getContent(trimmed);
 
     // 1. Handle Quote Normalization (Option 1 or 3)
     if (option === 'quotes' || option === 'both') {
-      const trimmed = newPart.trim();
-      if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
-        newPart = newPart.replace(trimmed, `"${trimmed.slice(1, -1)}"`);
+      if (index === 2) {
+        // 3rd value (boolean) must NOT be quoted
+        newPart = newPart.replace(trimmed, content);
+      } else {
+        // 1st, 2nd, and 4th values must be double quoted
+        newPart = newPart.replace(trimmed, `"${content}"`);
       }
     }
 
     // 2. Handle Capitalization (Option 2 or 3)
     if (index === 3 && (option === 'capitalize' || option === 'both')) {
-      const trimmed = newPart.trim();
-      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-        const content = trimmed.slice(1, -1).toUpperCase();
-        newPart = newPart.replace(trimmed, `"${content}"`);
-      } else if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
-        const content = trimmed.slice(1, -1).toUpperCase();
-        newPart = newPart.replace(trimmed, `'${content}'`);
-      } else {
-        newPart = newPart.toUpperCase();
-      }
+      const currentTrimmed = newPart.trim();
+      const currentContent = getContent(currentTrimmed);
+      const upperContent = currentContent.toUpperCase();
+      
+      // Ensure double quotes for 4th value as per requirement
+      newPart = newPart.replace(currentTrimmed, `"${upperContent}"`);
     }
 
     return newPart;
@@ -75,21 +86,60 @@ const transformPossibleNextStep = (value: string, option: 'quotes' | 'capitalize
 
 interface CapitalizeRefIDsToolProps {
   onBack: () => void;
+  onReset: () => void;
 }
 
-export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBack }) => {
+export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBack, onReset }) => {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedWorkbook, setProcessedWorkbook] = useState<XLSX.WorkBook | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isAlreadyNormalized, setIsAlreadyNormalized] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState<{ count: number; description: string; totalRows: number } | null>(null);
+  const [columnNotFound, setColumnNotFound] = useState(false);
+  const [validationResults, setValidationResults] = useState<{
+    needsQuoteFix: boolean;
+    needsCapitalization: boolean;
+  }>({ needsQuoteFix: false, needsCapitalization: false });
+  const [analysisResult, setAnalysisResult] = useState<{
+    totalRows: number;
+    quoteFixRows: number[];
+    capitalizeRows: number[];
+    bothFixRows: number[];
+  } | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{ 
+    count: number; 
+    quotesCount?: number;
+    capCount?: number;
+    description: string; 
+    totalRows: number;
+    selectedOption: 'quotes' | 'capitalize' | 'both';
+  } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
   const [downloadFilename, setDownloadFilename] = useState('');
 
   const workbookRef = useRef<XLSX.WorkBook | null>(null);
+
+  const formatRowNumbers = (rows: number[]) => {
+    if (rows.length === 0) return '';
+    const sortedRows = [...rows].sort((a, b) => a - b);
+    const ranges: string[] = [];
+    let start = sortedRows[0];
+    let end = sortedRows[0];
+
+    for (let i = 1; i < sortedRows.length; i++) {
+      if (sortedRows[i] === end + 1) {
+        end = sortedRows[i];
+      } else {
+        ranges.push(start === end ? `${start}` : `${start}–${end}`);
+        start = sortedRows[i];
+        end = sortedRows[i];
+      }
+    }
+    ranges.push(start === end ? `${start}` : `${start}–${end}`);
+    return ranges.join(', ');
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
@@ -103,6 +153,8 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
     setError(null);
     setSuccess(false);
     setIsAlreadyNormalized(false);
+    setColumnNotFound(false);
+    setAnalysisResult(null);
     setUpdateInfo(null);
     setProcessedWorkbook(null);
     setFile(uploadedFile);
@@ -146,24 +198,87 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
           }
         }
         
-        const dataRows = Math.max(0, maxDataRow - 8); // Row 9 is header (index 8)
+        if (possibleNextStepCol === -1) {
+          setColumnNotFound(true);
+        } else {
+          setColumnNotFound(false);
+        }
+        
+        let totalValidRows = 0;
         
         // Pre-validation: Check if file is already in expected state
-        if (possibleNextStepCol !== -1 && dataRows > 0) {
-          let needsAnyUpdate = false;
+        if (possibleNextStepCol !== -1) {
+          let needsQuoteFix = false;
+          let needsCapitalization = false;
+          
+          const quoteFixRows: number[] = [];
+          const capitalizeRows: number[] = [];
+          const bothFixRows: number[] = [];
+
           for (let r = headerRow + 1; r <= maxDataRow; r++) {
             const cellAddress = XLSX.utils.encode_cell({ r, c: possibleNextStepCol });
             const cell = worksheet[cellAddress];
-            if (cell && cell.v) {
-              const val = String(cell.v);
-              // Check if 'both' transformation would change anything
-              if (transformPossibleNextStep(val, 'both') !== val) {
-                needsAnyUpdate = true;
-                break;
+            
+            const cellValue = cell && cell.v !== undefined && cell.v !== null ? String(cell.v).trim() : '';
+            if (cellValue === '') continue;
+
+            totalValidRows++;
+            
+            let rowNeedsQuoteFix = false;
+            let rowNeedsCapitalization = false;
+
+            const parts = splitPossibleNextStep(cellValue);
+            
+            parts.forEach((part, index) => {
+              const trimmed = part.trim();
+              if (trimmed.length > 0) {
+                // Check quotes
+                if (index === 2) {
+                  // Boolean: must NOT be quoted
+                  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+                    rowNeedsQuoteFix = true;
+                    needsQuoteFix = true;
+                  }
+                } else {
+                  // 1st, 2nd, 4th: must be double quoted
+                  if (!(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+                    rowNeedsQuoteFix = true;
+                    needsQuoteFix = true;
+                  }
+                }
+
+                // Check capitalization for 4th part
+                if (index === 3) {
+                  const content = (trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'") )
+                    ? trimmed.slice(1, -1) 
+                    : trimmed;
+                  if (content !== content.toUpperCase()) {
+                    rowNeedsCapitalization = true;
+                    needsCapitalization = true;
+                  }
+                }
               }
+            });
+
+            const excelRowNumber = r + 1;
+            if (rowNeedsQuoteFix && rowNeedsCapitalization) {
+              bothFixRows.push(excelRowNumber);
+            } else if (rowNeedsQuoteFix) {
+              quoteFixRows.push(excelRowNumber);
+            } else if (rowNeedsCapitalization) {
+              capitalizeRows.push(excelRowNumber);
             }
           }
-          if (!needsAnyUpdate) {
+          
+          setAnalysisResult({
+            totalRows: totalValidRows,
+            quoteFixRows,
+            capitalizeRows,
+            bothFixRows
+          });
+          
+          setValidationResults({ needsQuoteFix, needsCapitalization });
+          if (!needsQuoteFix && !needsCapitalization && totalValidRows > 0) {
             setIsAlreadyNormalized(true);
           }
         }
@@ -221,6 +336,8 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
         }
 
         let updatedRowsCount = 0;
+        let updatedQuotesCount = 0;
+        let updatedReferenceIdCount = 0;
         
         // Find the last non-empty row in the sheet
         let maxDataRow = headerRow;
@@ -244,7 +361,48 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
           if (cell && cell.v) {
             const originalValue = String(cell.v);
             const transformedValue = transformPossibleNextStep(originalValue, option);
+            
             if (transformedValue !== originalValue) {
+              // Track specific updates
+              const originalParts = splitPossibleNextStep(originalValue);
+              const transformedParts = splitPossibleNextStep(transformedValue);
+              
+              let quotesUpdated = false;
+              let capUpdated = false;
+
+              originalParts.forEach((origPart, idx) => {
+                const transPart = transformedParts[idx];
+                if (origPart !== transPart) {
+                  const origTrimmed = origPart.trim();
+                  const transTrimmed = transPart.trim();
+                  
+                  // Check if content changed (capitalization) or just quotes
+                  const origContent = origTrimmed.startsWith('"') && origTrimmed.endsWith('"') 
+                    ? origTrimmed.slice(1, -1) 
+                    : (origTrimmed.startsWith("'") && origTrimmed.endsWith("'") ? origTrimmed.slice(1, -1) : origTrimmed);
+                  const transContent = transTrimmed.startsWith('"') && transTrimmed.endsWith('"') 
+                    ? transTrimmed.slice(1, -1) 
+                    : (transTrimmed.startsWith("'") && transTrimmed.endsWith("'") ? transTrimmed.slice(1, -1) : transTrimmed);
+
+                  if (origContent !== transContent) {
+                    capUpdated = true;
+                  }
+                  if (origTrimmed !== transTrimmed && origContent === transContent) {
+                    quotesUpdated = true;
+                  }
+                  // If both changed (e.g. 'abc' -> "ABC"), both flags will be true
+                  if (origTrimmed !== transTrimmed && origContent !== transContent) {
+                    // Check if quotes also changed
+                    const origHasDouble = origTrimmed.startsWith('"') && origTrimmed.endsWith('"');
+                    const transHasDouble = transTrimmed.startsWith('"') && transTrimmed.endsWith('"');
+                    if (!origHasDouble && transHasDouble) quotesUpdated = true;
+                  }
+                }
+              });
+
+              if (quotesUpdated) updatedQuotesCount++;
+              if (capUpdated) updatedReferenceIdCount++;
+              
               cell.v = transformedValue;
               updatedRowsCount++;
               // If it's a rich text or has other properties, we might need to update them too
@@ -257,11 +415,18 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
         setSuccess(true);
         
         let description = '';
-        if (option === 'quotes') description = 'Normalized single quotes to double quotes.';
+        if (option === 'quotes') description = 'Normalized quotes for strings and ensured boolean is not quoted.';
         else if (option === 'capitalize') description = 'Capitalized reference IDs (4th value).';
         else if (option === 'both') description = 'Normalized quotes and capitalized reference IDs.';
 
-        setUpdateInfo({ count: updatedRowsCount, description, totalRows: totalRowsCount });
+        setUpdateInfo({ 
+          count: updatedRowsCount, 
+          quotesCount: updatedQuotesCount,
+          capCount: updatedReferenceIdCount,
+          description, 
+          totalRows: totalRowsCount,
+          selectedOption: option
+        });
         
         let suffix = '_PROCESSED';
         if (option === 'quotes') suffix = '_QUOTES_NORMALIZED';
@@ -299,22 +464,29 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
       <motion.div 
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
-        className="flex items-center gap-4 mb-12"
+        className="flex items-center justify-between mb-12"
       >
-        <button 
+        <motion.button 
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={onBack}
-          className="p-3 rounded-2xl transition-all active:scale-95 cursor-pointer bg-white border border-gray-200 hover:bg-gray-50"
+          className="group flex items-center gap-3 px-5 py-3 rounded-2xl transition-all cursor-pointer bg-white border border-blue-900 hover:bg-blue-50 hover:shadow-md"
         >
-          <ArrowLeft size={20} className="text-gray-600" />
-        </button>
-          <div>
-            <h2 className="text-3xl font-black tracking-tight text-gray-900">
-              Reference ID & Quote Tool
-            </h2>
-            <p className="text-sm font-medium text-gray-500">
-              Normalize quotes and capitalize reference IDs in the POSSIBLE NEXT STEP column.
-            </p>
-          </div>
+          <ArrowLeft size={18} className="text-blue-900 transition-colors" />
+          <span className="text-sm font-bold text-blue-900 transition-colors">
+            Go back to Home
+          </span>
+        </motion.button>
+
+        <motion.button 
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onReset}
+          className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm cursor-pointer bg-red-50 border border-red-100 text-red-600 hover:bg-red-100"
+        >
+          <RefreshCw size={18} className="text-red-600" /> 
+          <span>Reset Tool</span>
+        </motion.button>
       </motion.div>
 
       <div className="grid grid-cols-1 gap-8">
@@ -366,6 +538,109 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
           </h3>
 
           <div className="flex flex-col items-center gap-6">
+            {columnNotFound && file && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="w-full max-w-md p-6 rounded-[2rem] bg-red-50 border border-red-100 text-red-800 flex flex-col items-center text-center gap-3"
+              >
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-red-100 text-red-600">
+                  <AlertCircle size={24} />
+                </div>
+                <div>
+                  <h4 className="font-black text-lg">Column Not Found</h4>
+                  <p className="text-sm font-medium opacity-80">
+                    Couldn't identify the "POSSIBLE NEXT STEP" column in Row 9.<br/> Please ensure the file follows the correct template.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {file && !isAlreadyNormalized && !isProcessing && !success && analysisResult && !columnNotFound && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-2xl p-8 rounded-[2.5rem] bg-white border border-gray-100 shadow-xl shadow-gray-200/50 text-gray-900"
+              >
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gray-50 text-gray-400">
+                    <AlertCircle size={24} />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-xl tracking-tight">Identified Changes</h4>
+                    <p className="text-sm font-bold text-gray-400">{analysisResult.totalRows} rows analyzed</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  {analysisResult.bothFixRows.length === analysisResult.totalRows ? (
+                    <div className="p-5 rounded-3xl bg-purple-50/50 border border-purple-100/50 text-purple-900">
+                      <p className="flex items-center gap-3 font-bold text-base">
+                        <span className="w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.6)]" />
+                        All {analysisResult.totalRows} rows require quote normalization and referenceID capitalization
+                      </p>
+                    </div>
+                  ) : analysisResult.quoteFixRows.length === analysisResult.totalRows ? (
+                    <div className="p-5 rounded-3xl bg-amber-50/50 border border-amber-100/50 text-amber-900">
+                      <p className="flex items-center gap-3 font-bold text-base">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
+                        All {analysisResult.totalRows} rows require quote normalization
+                      </p>
+                    </div>
+                  ) : analysisResult.capitalizeRows.length === analysisResult.totalRows ? (
+                    <div className="p-5 rounded-3xl bg-blue-50/50 border border-blue-100/50 text-blue-900">
+                      <p className="flex items-center gap-3 font-bold text-base">
+                        <span className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
+                        All {analysisResult.totalRows} rows require referenceID capitalization
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {analysisResult.bothFixRows.length > 0 && (
+                        <div className="p-5 rounded-3xl bg-purple-50/50 border border-purple-100/50 text-purple-900">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="flex items-center gap-3 font-black text-base">
+                              <span className="w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.6)]" />
+                              Both Updates → {analysisResult.bothFixRows.length} rows
+                            </span>
+                          </div>
+                          <p className="pl-5 text-purple-700/60 font-bold text-sm leading-relaxed break-all">
+                            Rows: {formatRowNumbers(analysisResult.bothFixRows)}
+                          </p>
+                        </div>
+                      )}
+                      {analysisResult.quoteFixRows.length > 0 && (
+                        <div className="p-5 rounded-3xl bg-amber-50/50 border border-amber-100/50 text-amber-900">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="flex items-center gap-3 font-black text-base">
+                              <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
+                              Quote Normalization → {analysisResult.quoteFixRows.length} rows
+                            </span>
+                          </div>
+                          <p className="pl-5 text-amber-700/60 font-bold text-sm leading-relaxed break-all">
+                            Rows: {formatRowNumbers(analysisResult.quoteFixRows)}
+                          </p>
+                        </div>
+                      )}
+                      {analysisResult.capitalizeRows.length > 0 && (
+                        <div className="p-5 rounded-3xl bg-blue-50/50 border border-blue-100/50 text-blue-900">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="flex items-center gap-3 font-black text-base">
+                              <span className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
+                              ReferenceID Capitalization → {analysisResult.capitalizeRows.length} rows
+                            </span>
+                          </div>
+                          <p className="pl-5 text-blue-700/60 font-bold text-sm leading-relaxed break-all">
+                            Rows: {formatRowNumbers(analysisResult.capitalizeRows)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
             {isAlreadyNormalized ? (
               <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -382,7 +657,7 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
                   </p>
                 </div>
               </motion.div>
-            ) : (
+            ) : !success && !columnNotFound && (
               <button
                 onClick={() => setIsSelectionModalOpen(true)}
                 disabled={!file || isProcessing}
@@ -406,29 +681,76 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
               <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="flex flex-col items-center gap-4 w-full max-w-md"
+                className="flex flex-col items-center gap-6 w-full max-w-2xl"
               >
-                <div className="w-full p-6 rounded-[2rem] bg-green-50 border border-green-100 text-green-800">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-green-100 text-green-600">
-                      <CheckCircle2 size={20} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                  {/* Identified Changes Block */}
+                  {analysisResult && (
+                    <div className="p-6 rounded-[2rem] bg-amber-50 border border-amber-100 text-amber-900">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100 text-amber-600">
+                          <AlertCircle size={16} />
+                        </div>
+                        <h4 className="font-black text-base">Identified Changes</h4>
+                      </div>
+                      <div className="space-y-3 text-xs font-medium">
+                        {analysisResult.bothFixRows.length > 0 && (
+                          <p className="flex flex-col gap-0.5">
+                            <span className="text-amber-800 font-bold">Both updates:</span>
+                            <span className="text-amber-600/80">Rows {formatRowNumbers(analysisResult.bothFixRows)}</span>
+                          </p>
+                        )}
+                        {analysisResult.quoteFixRows.length > 0 && (
+                          <p className="flex flex-col gap-0.5">
+                            <span className="text-amber-800 font-bold">Only quotes:</span>
+                            <span className="text-amber-600/80">Rows {formatRowNumbers(analysisResult.quoteFixRows)}</span>
+                          </p>
+                        )}
+                        {analysisResult.capitalizeRows.length > 0 && (
+                          <p className="flex flex-col gap-0.5">
+                            <span className="text-amber-800 font-bold">Only capitalization:</span>
+                            <span className="text-amber-600/80">Rows {formatRowNumbers(analysisResult.capitalizeRows)}</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <h4 className="font-black text-lg">Transformation Complete!</h4>
-                  </div>
-                  <div className="space-y-2 text-sm font-medium opacity-90">
-                    <p className="flex justify-between">
-                      <span>Total Rows Identified:</span>
-                      <span className="font-black">{updateInfo.totalRows}</span>
-                    </p>
-                    <p className="flex justify-between">
-                      <span>Rows Updated:</span>
-                      <span className="font-black">{updateInfo.count}</span>
-                    </p>
-                    <p className="pt-2 border-t border-green-200/50">
-                      {updateInfo.description}
-                    </p>
+                  )}
+
+                  {/* Applied Changes Block */}
+                  <div className="p-6 rounded-[2rem] bg-green-50 border border-green-100 text-green-800">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-green-100 text-green-600">
+                        <CheckCircle2 size={16} />
+                      </div>
+                      <h4 className="font-black text-base">Applied Changes</h4>
+                    </div>
+                    <div className="space-y-2 text-xs font-medium opacity-90">
+                      <p className="flex justify-between">
+                        <span>Total Rows Updated:</span>
+                        <span className="font-black">{updateInfo.count}</span>
+                      </p>
+                      
+                      {(updateInfo.selectedOption === 'quotes' || updateInfo.selectedOption === 'both') && (
+                        <p className="flex justify-between">
+                          <span>Quotes Normalized:</span>
+                          <span className="font-black">{updateInfo.quotesCount || 0}</span>
+                        </p>
+                      )}
+                      
+                      {(updateInfo.selectedOption === 'capitalize' || updateInfo.selectedOption === 'both') && (
+                        <p className="flex justify-between">
+                          <span>Reference IDs Capitalized:</span>
+                          <span className="font-black">{updateInfo.capCount || 0}</span>
+                        </p>
+                      )}
+
+                      <p className="pt-2 border-t border-green-200/50 text-[10px] uppercase tracking-wider font-black">
+                        Operation: {updateInfo.selectedOption === 'both' ? 'Full Normalization' : updateInfo.selectedOption === 'quotes' ? 'Quote Fix Only' : 'Capitalization Only'}
+                      </p>
+                    </div>
                   </div>
                 </div>
+
                 <button 
                   onClick={() => setIsModalOpen(true)}
                   className="w-full flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-black text-lg transition-all shadow-lg active:scale-95 cursor-pointer bg-black text-white hover:bg-gray-800"
@@ -530,6 +852,8 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
             isOpen={isSelectionModalOpen}
             onClose={() => setIsSelectionModalOpen(false)}
             onProceed={processFile}
+            needsQuoteFix={validationResults.needsQuoteFix}
+            needsCapitalization={validationResults.needsCapitalization}
           />
         )}
       </AnimatePresence>
@@ -541,11 +865,26 @@ interface SelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onProceed: (option: 'quotes' | 'capitalize' | 'both') => void;
+  needsQuoteFix: boolean;
+  needsCapitalization: boolean;
 }
 
-const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, onProceed }) => {
+const SelectionModal: React.FC<SelectionModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onProceed,
+  needsQuoteFix,
+  needsCapitalization
+}) => {
   const [option, setOption] = useState<'quotes' | 'capitalize' | 'both' | null>(null);
   const [error, setError] = useState(false);
+
+  // Set default option based on needs
+  React.useEffect(() => {
+    if (needsQuoteFix && !needsCapitalization) setOption('quotes');
+    else if (!needsQuoteFix && needsCapitalization) setOption('capitalize');
+    else if (needsQuoteFix && needsCapitalization) setOption('both');
+  }, [needsQuoteFix, needsCapitalization]);
 
   if (!isOpen) return null;
 
@@ -558,10 +897,29 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, onProc
   };
 
   const options = [
-    { id: 'quotes', title: 'Single Quotes → Double Quotes', desc: 'Replace all \' with " in the POSSIBLE NEXT STEP column.' },
-    { id: 'capitalize', title: 'Capitalize Reference IDs', desc: 'Convert the 4th value (referenceID) to uppercase.' },
-    { id: 'both', title: 'Both', desc: 'Apply both quote normalization and capitalization.' },
-  ];
+    { 
+      id: 'quotes', 
+      title: 'Normalize Quotes', 
+      desc: 'Ensure strings are double quoted and boolean is not quoted.',
+      needed: needsQuoteFix
+    },
+    { 
+      id: 'capitalize', 
+      title: 'Capitalize Reference IDs', 
+      desc: 'Convert the 4th value (referenceID) to uppercase.',
+      needed: needsCapitalization
+    },
+    { 
+      id: 'both', 
+      title: 'Both Transformations', 
+      desc: 'Apply both quote normalization and capitalization.',
+      needed: needsQuoteFix && needsCapitalization
+    },
+  ].filter(opt => {
+    // Only show "Both" if both are needed
+    if (opt.id === 'both') return needsQuoteFix && needsCapitalization;
+    return true;
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -590,32 +948,53 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, onProc
           </div>
 
           <div className="space-y-3">
-            {options.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => {
-                  setOption(opt.id as any);
-                  setError(false);
-                }}
-                className={`w-full text-left p-5 rounded-3xl border-2 transition-all duration-300 ${
-                  option === opt.id 
-                    ? 'border-black bg-black/5 shadow-md' 
-                    : 'border-gray-100 hover:border-gray-200 bg-gray-50/50'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`font-bold ${option === opt.id ? 'text-black' : 'text-gray-700'}`}>
-                    {opt.title}
-                  </span>
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                    option === opt.id ? 'border-black bg-black' : 'border-gray-300'
-                  }`}>
-                    {option === opt.id && <div className="w-2 h-2 rounded-full bg-white" />}
+            {options.map((opt) => {
+              const isCompleted = !opt.needed;
+              return (
+                <button
+                  key={opt.id}
+                  disabled={isCompleted}
+                  onClick={() => {
+                    setOption(opt.id as any);
+                    setError(false);
+                  }}
+                  className={`w-full text-left p-5 rounded-3xl border-2 transition-all duration-300 ${
+                    isCompleted
+                      ? 'border-green-100 bg-green-50/50 cursor-not-allowed'
+                      : option === opt.id 
+                        ? 'border-black bg-black/5 shadow-md' 
+                        : 'border-gray-100 hover:border-gray-200 bg-gray-50/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-bold ${
+                        isCompleted ? 'text-green-600' : option === opt.id ? 'text-black' : 'text-gray-700'
+                      }`}>
+                        {opt.title}
+                      </span>
+                      {isCompleted && (
+                        <span className="px-2 py-0.5 rounded-full bg-green-100 text-[10px] font-black uppercase text-green-600">
+                          Already Correct
+                        </span>
+                      )}
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      isCompleted 
+                        ? 'border-green-500 bg-green-500' 
+                        : option === opt.id 
+                          ? 'border-black bg-black' 
+                          : 'border-gray-300'
+                    }`}>
+                      {(option === opt.id || isCompleted) && (
+                        <div className="w-2 h-2 rounded-full bg-white" />
+                      )}
+                    </div>
                   </div>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">{opt.desc}</p>
-              </button>
-            ))}
+                  <p className="text-xs text-gray-500 leading-relaxed">{opt.desc}</p>
+                </button>
+              );
+            })}
           </div>
 
           {error && (
@@ -633,13 +1012,13 @@ const SelectionModal: React.FC<SelectionModalProps> = ({ isOpen, onClose, onProc
         <div className="p-6 flex gap-3 bg-gray-50">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-4 rounded-2xl font-bold transition-all active:scale-95 cursor-pointer bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+            className="flex-1 px-4 py-4 rounded-2xl font-bold transition-all active:scale-95 cursor-pointer bg-transparent text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
             Cancel
           </button>
           <button
             onClick={handleProceed}
-            className="flex-1 px-4 py-4 rounded-2xl font-black transition-all shadow-lg active:scale-95 cursor-pointer bg-black text-white hover:bg-gray-800"
+            className="flex-1 px-4 py-4 rounded-2xl font-black transition-all shadow-xl active:scale-95 cursor-pointer bg-black text-white hover:bg-gray-800"
           >
             Proceed
           </button>
