@@ -291,7 +291,7 @@ export default function App() {
         ...results.map(r => [
           r.workflowStep, 
           r.extractedCurrentState || '',
-          `"${r.step}","${r.state}",${r.rejected},"${r.referenceID}"`
+          `"${r.state}","${r.step}",${r.rejected},"${r.referenceID}"`
         ]) // Row 10 onwards: Data
       ];
       
