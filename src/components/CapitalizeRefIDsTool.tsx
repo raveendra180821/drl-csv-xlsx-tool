@@ -15,6 +15,12 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 const splitPossibleNextStep = (value: string): string[] => {
+  if (!value) return [''];
+  // Optimization: If no comma and no quotes, it's a single part
+  if (!value.includes(',') && !value.includes('"') && !value.includes("'")) {
+    return [value];
+  }
+
   const parts: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -27,8 +33,14 @@ const splitPossibleNextStep = (value: string): string[] => {
       quoteChar = char;
       current += char;
     } else if (char === quoteChar && inQuotes) {
-      inQuotes = false;
-      current += char;
+      // Handle escaped quotes (e.g., "")
+      if (i + 1 < value.length && value[i + 1] === quoteChar) {
+        current += char + value[i + 1];
+        i++; // Skip the next quote
+      } else {
+        inQuotes = false;
+        current += char;
+      }
     } else if (char === ',' && !inQuotes) {
       parts.push(current);
       current = '';
@@ -40,8 +52,14 @@ const splitPossibleNextStep = (value: string): string[] => {
   return parts;
 };
 
-const transformPossibleNextStep = (value: string, option: 'quotes' | 'capitalize' | 'both'): string => {
+const transformPossibleNextStep = (value: string, option: 'quotes' | 'capitalize' | 'both'): { 
+  newValue: string; 
+  quotesChanged: boolean; 
+  capChanged: boolean; 
+} => {
   const parts = splitPossibleNextStep(value);
+  let quotesChanged = false;
+  let capChanged = false;
 
   const transformedParts = parts.map((part, index) => {
     let newPart = part;
@@ -59,12 +77,17 @@ const transformPossibleNextStep = (value: string, option: 'quotes' | 'capitalize
 
     // 1. Handle Quote Normalization (Option 1 or 3)
     if (option === 'quotes' || option === 'both') {
+      let targetPart = newPart;
       if (index === 2) {
         // 3rd value (boolean) must NOT be quoted
-        newPart = newPart.replace(trimmed, content);
+        targetPart = newPart.replace(trimmed, content);
       } else {
         // 1st, 2nd, and 4th values must be double quoted
-        newPart = newPart.replace(trimmed, `"${content}"`);
+        targetPart = newPart.replace(trimmed, `"${content}"`);
+      }
+      if (targetPart !== newPart) {
+        quotesChanged = true;
+        newPart = targetPart;
       }
     }
 
@@ -74,14 +97,21 @@ const transformPossibleNextStep = (value: string, option: 'quotes' | 'capitalize
       const currentContent = getContent(currentTrimmed);
       const upperContent = currentContent.toUpperCase();
       
-      // Ensure double quotes for 4th value as per requirement
-      newPart = newPart.replace(currentTrimmed, `"${upperContent}"`);
+      if (upperContent !== currentContent) {
+        capChanged = true;
+        // Ensure double quotes for 4th value as per requirement
+        newPart = newPart.replace(currentTrimmed, `"${upperContent}"`);
+      }
     }
 
     return newPart;
   });
 
-  return transformedParts.join(',');
+  return { 
+    newValue: transformedParts.join(','), 
+    quotesChanged, 
+    capChanged 
+  };
 };
 
 interface CapitalizeRefIDsToolProps {
@@ -92,6 +122,7 @@ interface CapitalizeRefIDsToolProps {
 export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBack, onReset }) => {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState('Processing...');
   const [processedWorkbook, setProcessedWorkbook] = useState<XLSX.WorkBook | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -118,8 +149,8 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
   const [downloadFilename, setDownloadFilename] = useState('');
-
   const workbookRef = useRef<XLSX.WorkBook | null>(null);
+  const processedWorkbookRef = useRef<XLSX.WorkBook | null>(null);
 
   const formatRowNumbers = (rows: number[]) => {
     if (rows.length === 0) return '';
@@ -158,6 +189,8 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
     setUpdateInfo(null);
     setProcessedWorkbook(null);
     setFile(uploadedFile);
+    setIsProcessing(true);
+    setProcessingMessage('Reading file...');
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -172,24 +205,13 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         
-        // Efficiently find the max row/col by iterating over keys
-        let maxCol = 0;
-        let maxDataRow = 8; // Header is Row 9 (index 8)
-        for (const key in worksheet) {
-          if (key[0] === '!') continue;
-          const cell = XLSX.utils.decode_cell(key);
-          if (cell.c > maxCol) maxCol = cell.c;
-          
-          const cellData = worksheet[key];
-          if (cellData && cellData.v !== undefined && cellData.v !== null && String(cellData.v).trim() !== '') {
-            if (cell.r > maxDataRow) maxDataRow = cell.r;
-          }
-        }
-
+        // Optimization: Use decode_range instead of iterating over keys
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+        const headerRow = 8;
+        
         // Find POSSIBLE NEXT STEP column in Row 9 (index 8)
         let possibleNextStepCol = -1;
-        const headerRow = 8;
-        for (let c = 0; c <= maxCol; c++) {
+        for (let c = range.s.c; c <= range.e.c; c++) {
           const cellAddress = XLSX.utils.encode_cell({ r: headerRow, c });
           const cell = worksheet[cellAddress];
           if (cell && cell.v && String(cell.v).trim().toUpperCase() === 'POSSIBLE NEXT STEP') {
@@ -200,92 +222,137 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
         
         if (possibleNextStepCol === -1) {
           setColumnNotFound(true);
-        } else {
-          setColumnNotFound(false);
+          workbookRef.current = workbook;
+          setIsProcessing(false);
+          return;
         }
-        
+
+        setColumnNotFound(false);
+        setProcessingMessage('Analyzing data...');
+
+        // CRITICAL: Detect actual data range to avoid processing 1M empty rows
+        let actualMaxRow = headerRow;
+        let emptyRowCount = 0;
+        const scanLimit = 100; // Stop after 100 consecutive empty rows
+
+        for (let r = headerRow + 1; r <= range.e.r; r++) {
+          const cellAddress = XLSX.utils.encode_cell({ r, c: possibleNextStepCol });
+          const cell = worksheet[cellAddress];
+          const cellValue = cell && cell.v !== undefined && cell.v !== null ? String(cell.v).trim() : '';
+
+          if (cellValue !== '') {
+            actualMaxRow = r;
+            emptyRowCount = 0;
+          } else {
+            emptyRowCount++;
+          }
+
+          if (emptyRowCount >= scanLimit) break;
+        }
+
         let totalValidRows = 0;
+        let needsQuoteFix = false;
+        let needsCapitalization = false;
+        const quoteFixRows: number[] = [];
+        const capitalizeRows: number[] = [];
+        const bothFixRows: number[] = [];
         
-        // Pre-validation: Check if file is already in expected state
-        if (possibleNextStepCol !== -1) {
-          let needsQuoteFix = false;
-          let needsCapitalization = false;
-          
-          const quoteFixRows: number[] = [];
-          const capitalizeRows: number[] = [];
-          const bothFixRows: number[] = [];
+        let currentRow = headerRow + 1;
+        const chunkSize = 2000;
 
-          for (let r = headerRow + 1; r <= maxDataRow; r++) {
-            const cellAddress = XLSX.utils.encode_cell({ r, c: possibleNextStepCol });
-            const cell = worksheet[cellAddress];
+        const validateChunk = () => {
+          try {
+            const endRow = Math.min(currentRow + chunkSize, actualMaxRow + 1);
             
-            const cellValue = cell && cell.v !== undefined && cell.v !== null ? String(cell.v).trim() : '';
-            if (cellValue === '') continue;
+            for (let r = currentRow; r < endRow; r++) {
+              const cellAddress = XLSX.utils.encode_cell({ r, c: possibleNextStepCol });
+              const cell = worksheet[cellAddress];
+              
+              // Skip empty cells early
+              if (!cell || cell.v === undefined || cell.v === null) continue;
+              const cellValue = String(cell.v).trim();
+              if (cellValue === '') continue;
 
-            totalValidRows++;
-            
-            let rowNeedsQuoteFix = false;
-            let rowNeedsCapitalization = false;
+              totalValidRows++;
+              
+              let rowNeedsQuoteFix = false;
+              let rowNeedsCapitalization = false;
 
-            const parts = splitPossibleNextStep(cellValue);
-            
-            parts.forEach((part, index) => {
-              const trimmed = part.trim();
-              if (trimmed.length > 0) {
-                // Check quotes
-                if (index === 2) {
-                  // Boolean: must NOT be quoted
-                  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-                    rowNeedsQuoteFix = true;
-                    needsQuoteFix = true;
+              const parts = splitPossibleNextStep(cellValue);
+              
+              parts.forEach((part, index) => {
+                const trimmed = part.trim();
+                if (trimmed.length > 0) {
+                  // Check quotes
+                  if (index === 2) {
+                    // Boolean: must NOT be quoted
+                    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+                      rowNeedsQuoteFix = true;
+                      needsQuoteFix = true;
+                    }
+                  } else {
+                    // 1st, 2nd, 4th: must be double quoted
+                    if (!(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+                      rowNeedsQuoteFix = true;
+                      needsQuoteFix = true;
+                    }
                   }
-                } else {
-                  // 1st, 2nd, 4th: must be double quoted
-                  if (!(trimmed.startsWith('"') && trimmed.endsWith('"'))) {
-                    rowNeedsQuoteFix = true;
-                    needsQuoteFix = true;
+
+                  // Check capitalization for 4th part
+                  if (index === 3) {
+                    const content = (trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'") )
+                      ? trimmed.slice(1, -1) 
+                      : trimmed;
+                    if (content !== content.toUpperCase()) {
+                      rowNeedsCapitalization = true;
+                      needsCapitalization = true;
+                    }
                   }
                 }
+              });
 
-                // Check capitalization for 4th part
-                if (index === 3) {
-                  const content = (trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'") )
-                    ? trimmed.slice(1, -1) 
-                    : trimmed;
-                  if (content !== content.toUpperCase()) {
-                    rowNeedsCapitalization = true;
-                    needsCapitalization = true;
-                  }
-                }
+              const excelRowNumber = r + 1;
+              if (rowNeedsQuoteFix && rowNeedsCapitalization) {
+                bothFixRows.push(excelRowNumber);
+              } else if (rowNeedsQuoteFix) {
+                quoteFixRows.push(excelRowNumber);
+              } else if (rowNeedsCapitalization) {
+                capitalizeRows.push(excelRowNumber);
               }
-            });
-
-            const excelRowNumber = r + 1;
-            if (rowNeedsQuoteFix && rowNeedsCapitalization) {
-              bothFixRows.push(excelRowNumber);
-            } else if (rowNeedsQuoteFix) {
-              quoteFixRows.push(excelRowNumber);
-            } else if (rowNeedsCapitalization) {
-              capitalizeRows.push(excelRowNumber);
             }
+
+            currentRow = endRow;
+            if (currentRow <= actualMaxRow) {
+              const progress = Math.round(((currentRow - headerRow) / (actualMaxRow - headerRow || 1)) * 100);
+              setProcessingMessage(`Analyzing data (${progress}%)...`);
+              setTimeout(validateChunk, 0);
+            } else {
+              setAnalysisResult({
+                totalRows: totalValidRows,
+                quoteFixRows,
+                capitalizeRows,
+                bothFixRows
+              });
+              
+              setValidationResults({ needsQuoteFix, needsCapitalization });
+              if (!needsQuoteFix && !needsCapitalization && totalValidRows > 0) {
+                setIsAlreadyNormalized(true);
+              }
+              workbookRef.current = workbook;
+              setIsProcessing(false);
+            }
+          } catch (err) {
+            setError('Error during data analysis.');
+            console.error(err);
+            setIsProcessing(false);
           }
-          
-          setAnalysisResult({
-            totalRows: totalValidRows,
-            quoteFixRows,
-            capitalizeRows,
-            bothFixRows
-          });
-          
-          setValidationResults({ needsQuoteFix, needsCapitalization });
-          if (!needsQuoteFix && !needsCapitalization && totalValidRows > 0) {
-            setIsAlreadyNormalized(true);
-          }
-        }
-        workbookRef.current = workbook;
+        };
+
+        validateChunk();
       } catch (err) {
         setError('Failed to read the Excel file.');
         console.error(err);
+        setIsProcessing(false);
       }
     };
     reader.readAsArrayBuffer(uploadedFile);
@@ -295,36 +362,28 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
     if (!workbookRef.current || !file) return;
 
     setIsProcessing(true);
+    setProcessingMessage('Transforming data...');
     setError(null);
     setIsSelectionModalOpen(false);
 
     setTimeout(() => {
       try {
         const originalWorkbook = workbookRef.current!;
-        // Deep clone the workbook to avoid modifying the original reference
-        const workbook = XLSX.read(XLSX.write(originalWorkbook, { bookType: 'xlsx', type: 'array' }), { 
-          type: 'array',
-          cellStyles: true,
-          cellNF: true,
-          cellDates: true
-        });
-
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
+        // Efficiently clone the workbook structure
+        const workbook = XLSX.utils.book_new();
+        workbook.Props = { ...originalWorkbook.Props };
+        workbook.Custprops = { ...originalWorkbook.Custprops };
         
-        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-        
-        // Find header row (Row 9, which is index 8)
+        const firstSheetName = originalWorkbook.SheetNames[0];
+        const firstSheet = originalWorkbook.Sheets[firstSheetName];
+        const range = XLSX.utils.decode_range(firstSheet['!ref'] || 'A1');
         const headerRow = 8;
-        if (range.e.r < headerRow) {
-          throw new Error('File does not have enough rows. Row 9 must be the header.');
-        }
 
         // Find POSSIBLE NEXT STEP column
         let possibleNextStepCol = -1;
         for (let c = range.s.c; c <= range.e.c; c++) {
           const cellAddress = XLSX.utils.encode_cell({ r: headerRow, c });
-          const cell = worksheet[cellAddress];
+          const cell = firstSheet[cellAddress];
           if (cell && cell.v && String(cell.v).trim().toUpperCase() === 'POSSIBLE NEXT STEP') {
             possibleNextStepCol = c;
             break;
@@ -335,127 +394,207 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
           throw new Error('Column "POSSIBLE NEXT STEP" not found in Row 9.');
         }
 
+        // CRITICAL: Detect actual data range to avoid processing 1M empty rows
+        let actualMaxRow = headerRow;
+        let emptyRowCount = 0;
+        const scanLimit = 100;
+
+        for (let r = headerRow + 1; r <= range.e.r; r++) {
+          const cellAddress = XLSX.utils.encode_cell({ r, c: possibleNextStepCol });
+          const cell = firstSheet[cellAddress];
+          const cellValue = cell && cell.v !== undefined && cell.v !== null ? String(cell.v).trim() : '';
+
+          if (cellValue !== '') {
+            actualMaxRow = r;
+            emptyRowCount = 0;
+          } else {
+            emptyRowCount++;
+          }
+
+          if (emptyRowCount >= scanLimit) break;
+        }
+
+        originalWorkbook.SheetNames.forEach((name, idx) => {
+          const originalSheet = originalWorkbook.Sheets[name];
+          if (idx === 0) {
+            // Clone the first sheet
+            const newSheet: XLSX.WorkSheet = { ...originalSheet };
+            
+            // Optimization: Use actualMaxRow instead of full range for cloning
+            for (let r = range.s.r; r <= actualMaxRow; r++) {
+              for (let c = range.s.c; c <= range.e.c; c++) {
+                const addr = XLSX.utils.encode_cell({ r, c });
+                if (originalSheet[addr]) {
+                  newSheet[addr] = { ...originalSheet[addr] };
+                }
+              }
+            }
+            XLSX.utils.book_append_sheet(workbook, newSheet, name);
+          } else {
+            // Reference other sheets to save memory
+            XLSX.utils.book_append_sheet(workbook, originalSheet, name);
+          }
+        });
+
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        const totalRowsCount = Math.max(0, actualMaxRow - headerRow);
         let updatedRowsCount = 0;
         let updatedQuotesCount = 0;
         let updatedReferenceIdCount = 0;
-        
-        // Find the last non-empty row in the sheet
-        let maxDataRow = headerRow;
-        for (const key in worksheet) {
-          if (key[0] === '!') continue;
-          const cell = XLSX.utils.decode_cell(key);
-          if (cell.r > maxDataRow) {
-            const cellData = worksheet[key];
-            if (cellData && cellData.v !== undefined && cellData.v !== null && String(cellData.v).trim() !== '') {
-              maxDataRow = cell.r;
-            }
-          }
-        }
-        const totalRowsCount = Math.max(0, maxDataRow - headerRow);
-        
-        // Process rows from Row 10 (index 9) onwards
-        for (let r = headerRow + 1; r <= maxDataRow; r++) {
-          const cellAddress = XLSX.utils.encode_cell({ r, c: possibleNextStepCol });
-          const cell = worksheet[cellAddress];
-          
-          if (cell && cell.v) {
-            const originalValue = String(cell.v);
-            const transformedValue = transformPossibleNextStep(originalValue, option);
+        let currentRow = headerRow + 1;
+        const chunkSize = 2000;
+
+        const processChunk = () => {
+          try {
+            const endRow = Math.min(currentRow + chunkSize, actualMaxRow + 1);
             
-            if (transformedValue !== originalValue) {
-              // Track specific updates
-              const originalParts = splitPossibleNextStep(originalValue);
-              const transformedParts = splitPossibleNextStep(transformedValue);
+            const progress = Math.round(((currentRow - headerRow) / (totalRowsCount || 1)) * 100);
+            setProcessingMessage(`Transforming data (${progress}%)...`);
+            for (let r = currentRow; r < endRow; r++) {
+              const cellAddress = XLSX.utils.encode_cell({ r, c: possibleNextStepCol });
+              const cell = worksheet[cellAddress];
               
-              let quotesUpdated = false;
-              let capUpdated = false;
-
-              originalParts.forEach((origPart, idx) => {
-                const transPart = transformedParts[idx];
-                if (origPart !== transPart) {
-                  const origTrimmed = origPart.trim();
-                  const transTrimmed = transPart.trim();
+              if (cell && cell.v) {
+                const originalValue = String(cell.v);
+                const result = transformPossibleNextStep(originalValue, option);
+                const newValue = result.newValue;
+                const quotesChanged = result.quotesChanged;
+                const capChanged = result.capChanged;
+                
+                if (newValue !== originalValue) {
+                  if (quotesChanged) updatedQuotesCount++;
+                  if (capChanged) updatedReferenceIdCount++;
                   
-                  // Check if content changed (capitalization) or just quotes
-                  const origContent = origTrimmed.startsWith('"') && origTrimmed.endsWith('"') 
-                    ? origTrimmed.slice(1, -1) 
-                    : (origTrimmed.startsWith("'") && origTrimmed.endsWith("'") ? origTrimmed.slice(1, -1) : origTrimmed);
-                  const transContent = transTrimmed.startsWith('"') && transTrimmed.endsWith('"') 
-                    ? transTrimmed.slice(1, -1) 
-                    : (transTrimmed.startsWith("'") && transTrimmed.endsWith("'") ? transTrimmed.slice(1, -1) : transTrimmed);
-
-                  if (origContent !== transContent) {
-                    capUpdated = true;
-                  }
-                  if (origTrimmed !== transTrimmed && origContent === transContent) {
-                    quotesUpdated = true;
-                  }
-                  // If both changed (e.g. 'abc' -> "ABC"), both flags will be true
-                  if (origTrimmed !== transTrimmed && origContent !== transContent) {
-                    // Check if quotes also changed
-                    const origHasDouble = origTrimmed.startsWith('"') && origTrimmed.endsWith('"');
-                    const transHasDouble = transTrimmed.startsWith('"') && transTrimmed.endsWith('"');
-                    if (!origHasDouble && transHasDouble) quotesUpdated = true;
-                  }
+                  worksheet[cellAddress].v = newValue;
+                  updatedRowsCount++;
+                  if (worksheet[cellAddress].w) worksheet[cellAddress].w = newValue;
                 }
-              });
-
-              if (quotesUpdated) updatedQuotesCount++;
-              if (capUpdated) updatedReferenceIdCount++;
-              
-              cell.v = transformedValue;
-              updatedRowsCount++;
-              // If it's a rich text or has other properties, we might need to update them too
-              if (cell.w) cell.w = transformedValue;
+              }
             }
+
+            currentRow = endRow;
+
+            if (currentRow <= actualMaxRow) {
+              setTimeout(processChunk, 0);
+            } else {
+              // Trim the worksheet range before finalizing
+              const finalRange = {
+                s: { r: 0, c: 0 },
+                e: { r: actualMaxRow, c: range.e.c }
+              };
+              worksheet['!ref'] = XLSX.utils.encode_range(finalRange);
+              finalizeProcessing();
+            }
+          } catch (chunkErr: any) {
+            console.error('Error in processChunk:', chunkErr);
+            setError(`Error processing row ${currentRow}: ${chunkErr.message}`);
+            setIsProcessing(false);
           }
-        }
+        };
 
-        setProcessedWorkbook(workbook);
-        setSuccess(true);
-        
-        let description = '';
-        if (option === 'quotes') description = 'Normalized quotes for strings and ensured boolean is not quoted.';
-        else if (option === 'capitalize') description = 'Capitalized reference IDs (4th value).';
-        else if (option === 'both') description = 'Normalized quotes and capitalized reference IDs.';
+        const finalizeProcessing = () => {
+          processedWorkbookRef.current = workbook;
+          setSuccess(true);
+          
+          let description = '';
+          if (option === 'quotes') description = 'Normalized quotes for strings and ensured boolean is not quoted.';
+          else if (option === 'capitalize') description = 'Capitalized reference IDs (4th value).';
+          else if (option === 'both') description = 'Normalized quotes and capitalized reference IDs.';
 
-        setUpdateInfo({ 
-          count: updatedRowsCount, 
-          quotesCount: updatedQuotesCount,
-          capCount: updatedReferenceIdCount,
-          description, 
-          totalRows: totalRowsCount,
-          selectedOption: option
-        });
-        
-        let suffix = '_PROCESSED';
-        if (option === 'quotes') suffix = '_QUOTES_NORMALIZED';
-        else if (option === 'capitalize') suffix = '_CAPITALIZED';
-        else if (option === 'both') suffix = '_NORMALIZED';
+          setUpdateInfo({ 
+            count: updatedRowsCount, 
+            quotesCount: updatedQuotesCount,
+            capCount: updatedReferenceIdCount,
+            description, 
+            totalRows: totalRowsCount,
+            selectedOption: option
+          });
+          
+          let suffix = '_PROCESSED';
+          if (option === 'quotes') suffix = '_QUOTES_NORMALIZED';
+          else if (option === 'capitalize') suffix = '_CAPITALIZED';
+          else if (option === 'both') suffix = '_NORMALIZED';
 
-        setDownloadFilename(file.name.replace('.xlsx', `${suffix}.xlsx`));
+          setDownloadFilename(file.name.replace('.xlsx', `${suffix}.xlsx`));
+          setIsProcessing(false);
+        };
+
+        processChunk();
       } catch (err: any) {
         setError(err.message || 'An error occurred during processing.');
-      } finally {
         setIsProcessing(false);
       }
     }, 100);
   };
 
   const downloadFile = () => {
-    if (!processedWorkbook) return;
+    if (!processedWorkbookRef.current) return;
 
-    const wbout = XLSX.write(processedWorkbook, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = downloadFilename || 'processed_file.xlsx';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setIsModalOpen(false);
+    setIsProcessing(true);
+    setProcessingMessage('Generating Excel file (this may take a few minutes for large files)...');
+    setError(null);
+    
+    setTimeout(() => {
+      try {
+        const workerCode = `
+          importScripts('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js');
+          self.onmessage = function(e) {
+            try {
+              const wbout = XLSX.write(e.data.workbook, e.data.options);
+              self.postMessage({ success: true, data: wbout });
+            } catch (err) {
+              self.postMessage({ success: false, error: err.message });
+            }
+          };
+        `;
+        
+        const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(workerBlob));
+        
+        const workerTimeout = setTimeout(() => {
+          console.error('Download worker timed out after 5 minutes');
+          worker.terminate();
+          setIsProcessing(false);
+          setError('The download process timed out. The file is very large and taking longer than 5 minutes to generate.');
+        }, 300000); // 5 minutes
+
+        worker.onmessage = (e) => {
+          clearTimeout(workerTimeout);
+          setIsProcessing(false);
+          if (e.data.success) {
+            const blob = new Blob([e.data.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = downloadFilename || 'processed_file.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setIsModalOpen(false);
+          } else {
+            setError('Failed to generate download file: ' + e.data.error);
+          }
+          worker.terminate();
+        };
+        
+        worker.onerror = (err) => {
+          clearTimeout(workerTimeout);
+          setIsProcessing(false);
+          setError('Worker error: ' + err.message);
+          worker.terminate();
+        };
+        
+        worker.postMessage({ 
+          workbook: processedWorkbookRef.current, 
+          options: { bookType: 'xlsx', type: 'array' } 
+        });
+      } catch (err: any) {
+        setIsProcessing(false);
+        setError('Failed to initialize download: ' + err.message);
+      }
+    }, 100);
   };
 
   return (
@@ -673,7 +812,7 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
                 ) : (
                   <Play size={24} fill="currentColor" />
                 )}
-                {isProcessing ? 'Processing...' : 'Process File'}
+                {isProcessing ? processingMessage : 'Process File'}
               </button>
             )}
 
@@ -835,9 +974,10 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
                 </button>
                 <button
                   onClick={downloadFile}
-                  className="flex-1 px-4 py-4 rounded-2xl font-black transition-all shadow-lg active:scale-95 cursor-pointer bg-black text-white hover:bg-gray-800"
+                  disabled={isProcessing}
+                  className={`flex-1 px-4 py-4 rounded-2xl font-black transition-all shadow-lg active:scale-95 cursor-pointer ${isProcessing ? 'bg-gray-400 cursor-not-allowed' : 'bg-black text-white hover:bg-gray-800'}`}
                 >
-                  Download
+                  {isProcessing ? 'Generating...' : 'Download'}
                 </button>
               </div>
             </motion.div>
