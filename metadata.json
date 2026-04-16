@@ -1,5 +1,5 @@
 {
-  "name": "DRL to CSV Professional Converter",
-  "description": "A production-ready tool to convert Drools Rule Language (.drl) files to CSV format with precise data extraction.",
+  "name": "DRL Tool",
+  "description": "A simple tool to convert Drools Rule Language (.drl) files to CSV or Excel format.",
   "requestFramePermissions": []
 }

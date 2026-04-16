@@ -606,10 +606,11 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
         className="flex items-center justify-between mb-12"
       >
         <motion.button 
-          whileHover={{ scale: 1.05 }}
+          whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.95 }}
+          transition={{ type: 'tween', ease: 'easeOut', duration: 0.2 }}
           onClick={onBack}
-          className="group flex items-center gap-3 px-5 py-3 rounded-2xl transition-all cursor-pointer bg-white border border-blue-900 hover:bg-blue-50 hover:shadow-md"
+          className="group flex items-center gap-3 px-5 py-3 rounded-2xl cursor-pointer bg-white border border-blue-900 hover:bg-blue-50 hover:shadow-md"
         >
           <ArrowLeft size={18} className="text-blue-900 transition-colors" />
           <span className="text-sm font-bold text-blue-900 transition-colors">
@@ -620,8 +621,9 @@ export const CapitalizeRefIDsTool: React.FC<CapitalizeRefIDsToolProps> = ({ onBa
         <motion.button 
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
+          transition={{ type: 'tween', ease: 'easeOut', duration: 0.2 }}
           onClick={onReset}
-          className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all shadow-sm cursor-pointer bg-red-50 border border-red-100 text-red-600 hover:bg-red-100"
+          className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold shadow-sm cursor-pointer bg-red-50 border border-red-100 text-red-600 hover:bg-red-100"
         >
           <RefreshCw size={18} className="text-red-600" /> 
           <span>Reset Tool</span>
@@ -1042,7 +1044,7 @@ const SelectionModal: React.FC<SelectionModalProps> = ({
       title: 'Normalize Quotes', 
       desc: 'Ensure strings are double quoted and boolean is not quoted.',
       needed: needsQuoteFix
-    },  
+    },
     { 
       id: 'capitalize', 
       title: 'Capitalize Reference IDs', 
