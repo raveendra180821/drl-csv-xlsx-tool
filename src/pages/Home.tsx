@@ -72,7 +72,7 @@ export const Home: React.FC = () => {
 
       <main className="space-y-16">
         {/* Main Tools Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <motion.button
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.98 }}
@@ -117,8 +117,8 @@ export const Home: React.FC = () => {
         </div>
 
         {/* Supporting Tools Section - Slightly smaller cards for secondary tools */}
-        <section className="pt-12 border-t border-gray-100">
-          <div className="mb-8">
+        <section className="border-t border-gray-100">
+          <div className="mb-2">
             <div className="flex items-center gap-4 mb-2">
               <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Supporting Tools</h2>
               <div className="flex-1 h-px bg-gray-50" />
