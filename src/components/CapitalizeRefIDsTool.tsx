@@ -1042,7 +1042,7 @@ const SelectionModal: React.FC<SelectionModalProps> = ({
       title: 'Normalize Quotes', 
       desc: 'Ensure strings are double quoted and boolean is not quoted.',
       needed: needsQuoteFix
-    },
+    },  
     { 
       id: 'capitalize', 
       title: 'Capitalize Reference IDs', 
