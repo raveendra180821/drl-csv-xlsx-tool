@@ -8,7 +8,8 @@ import {
   RefreshCw,
   ExternalLink,
   GitCompare,
-  FileCode
+  FileCode,
+  Guitar
 } from 'lucide-react';
 
 const supportingTools = [
@@ -18,12 +19,17 @@ const supportingTools = [
     url: 'https://bpd-spark.vercel.app/',
     icon: GitCompare,
     color: 'bg-orange-50 text-orange-600'
-  },
-  { 
+  },{ 
     name: 'XML to CSV/JSON', 
     description: 'Convert XML files into structured CSV or JSON formats.',
     url: 'https://xml-tool-bay.vercel.app/',
     icon: FileCode,
+    color: 'bg-cyan-50 text-cyan-600'
+  },{ 
+    name: 'Static BPD Validation', 
+    description: 'Compare the Static rule in JSON type',
+    url: 'https://static-rule-validator.vercel.app/',
+    icon: Guitar,
     color: 'bg-cyan-50 text-cyan-600'
   }
 ];
