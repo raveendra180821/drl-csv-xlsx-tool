@@ -1,12 +1,13 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { FileSpreadsheet, Tags, Type } from 'lucide-react';
+import { FileSpreadsheet, Tags, Type, Search } from 'lucide-react';
 
 const tools = [
   { name: 'DRL Tool', path: '/drl-to-csv', icon: FileSpreadsheet },
   { name: 'Labels Tool', path: '/format-labels', icon: Tags },
   { name: 'Capitalize Tool', path: '/capitalize-tool', icon: Type },
+  { name: 'Compare Tool', path: '/compare-ids', icon: Search },
 ];
 
 export const ToolNavigation: React.FC = () => {

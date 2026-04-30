@@ -9,7 +9,7 @@ import {
   ExternalLink,
   GitCompare,
   FileCode,
-  Guitar
+  Search,Guitar
 } from 'lucide-react';
 
 const supportingTools = [
@@ -19,7 +19,8 @@ const supportingTools = [
     url: 'https://bpd-spark.vercel.app/',
     icon: GitCompare,
     color: 'bg-orange-50 text-orange-600'
-  },{ 
+  },
+  { 
     name: 'XML to CSV/JSON', 
     description: 'Convert XML files into structured CSV or JSON formats.',
     url: 'https://xml-tool-bay.vercel.app/',
@@ -78,7 +79,7 @@ export const Home: React.FC = () => {
 
       <main className="space-y-16">
         {/* Main Tools Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <motion.button
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.98 }}
@@ -120,11 +121,25 @@ export const Home: React.FC = () => {
             <h3 className="text-2xl font-bold mb-2">Capitalize IDs</h3>
             <p className="text-sm text-gray-500 leading-relaxed">Normalize quotes and capitalize Reference IDs in Excel files.</p>
           </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: 'tween', ease: 'easeOut', duration: 0.2 }}
+            onClick={() => navigate('/compare-ids')}
+            className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-xl shadow-black/[0.02] text-left group hover:border-black/10 cursor-pointer"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mb-6 group-hover:bg-black group-hover:text-white transition-colors">
+              <Search size={32} />
+            </div>
+            <h3 className="text-2xl font-bold mb-2">Compare IDs</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">Compare and deduplicate Candidate IDs across different runs.</p>
+          </motion.button>
         </div>
 
         {/* Supporting Tools Section - Slightly smaller cards for secondary tools */}
         <section className="border-t border-gray-100">
-          <div className="mb-2">
+          <div className="mb-8">
             <div className="flex items-center gap-4 mb-2">
               <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Supporting Tools</h2>
               <div className="flex-1 h-px bg-gray-50" />

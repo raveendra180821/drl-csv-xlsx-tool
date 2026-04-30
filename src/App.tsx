@@ -13,6 +13,7 @@ import { Home } from './pages/Home';
 import { DRLToolPage } from './pages/DRLToolPage';
 import { LabelsToolPage } from './pages/LabelsToolPage';
 import { CapitalizeToolPage } from './pages/CapitalizeToolPage';
+import { CandidateComparePage } from './pages/CandidateComparePage';
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/drl-to-csv" element={<DRLToolPage />} />
             <Route path="/format-labels" element={<LabelsToolPage />} />
             <Route path="/capitalize-tool" element={<CapitalizeToolPage />} />
+            <Route path="/compare-ids" element={<CandidateComparePage />} />
           </Routes>
 
           <motion.footer 
